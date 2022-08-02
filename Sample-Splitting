@@ -1,3 +1,145 @@
-## Sample-Splitting:
+```{r}
+rm(list=ls())
+library(MASS)
 
-Testing
+ euclidean.dist <- function(x, y) {
+   sqrt(sum((x - y)^2))
+ }
+ 
+num_of_feats = 2
+
+###############################################################################
+hypothesis_test <- function(n){
+  
+  Xsigma <- diag(num_of_feats)
+  mean_vector <- rep(0, num_of_feats)
+  X <- rep(0, num_of_feats)
+
+  for(i in 1:n){
+        X_ith_row <- mvrnorm(1, mean_vector, Xsigma)
+        X <- rbind(X, X_ith_row)
+  }
+  X <- X[-1,] # -1 since the first row contains zero by our initial setup of X
+
+  # Use SRSWOR to randomly split the rows, which will act as the indices for the 
+  # train and test set
+  train_indices <- sample(1:n, n/2, replace=FALSE) 
+    
+  train_set <- X[train_indices,]
+  test_set <- X[-train_indices,]
+    
+  train_cluster_assignments <- kmeans(train_set, centers=2)$cluster
+  train_set <- cbind(train_set,train_cluster_assignments)
+    
+  # Subset the train set into the first and second cluster
+  train_first_cluster <- subset(train_set, train_cluster_assignments==1)
+  train_second_cluster <- subset(train_set, train_cluster_assignments==2)
+    
+  # Determine the clusters for the rows in the test set
+  # Decision rule for clustering test set: Assign a row in the test set to first cluster if it is closer 
+  # in Euclidean distance to the sample mean of the columns in the first cluster of the training set. Assign 
+  # the row in the test set to the second cluster otherwise.
+  
+  # Let theta1 be the sample mean of the rows in the first cluster of the training set
+  # Let theta2 be the sample mean of the rows in the second cluster of the training set
+    theta1 =  colMeans(train_first_cluster)[1:2]
+    theta2 =  colMeans(train_second_cluster)[1:2]
+    
+    
+    test_cluster_assignments <- c()
+    
+    for(r in 1:nrow(test_set)){
+      
+      rth_row <- test_set[r,]
+      
+      dist_from_theta1 <- euclidean.dist(rth_row, theta1)
+      dist_from_theta2 <- euclidean.dist(rth_row, theta2)
+      
+      
+      if (dist_from_theta1 <= dist_from_theta2) {
+        rth_row_cluster <- 1
+        test_cluster_assignments <- c(test_cluster_assignments, rth_row_cluster)} 
+      else {
+        rth_row_cluster <- 2
+        test_cluster_assignments <-c(test_cluster_assignments, rth_row_cluster)}
+    }
+
+##############################################################################  
+    
+  test_set <- cbind(test_set,test_cluster_assignments)
+    
+  test_first_cluster <- subset(test_set, test_cluster_assignments==1)
+  size_first_cluster_ff <- nrow(test_first_cluster)
+  
+  test_second_cluster <- subset(test_set, test_cluster_assignments==2)
+  size_second_cluster_ff <- nrow(test_second_cluster)
+  
+##############################################################################  
+  # Conduct a two-sample Z-test on X with respect to the first feature
+  # H0: The difference of means between clusters is zero
+  # HA: The difference of means between clusters is not zero
+
+  sigma_squared_ff <- Xsigma[1,1]
+    
+  mean_first_cluster_ff <- mean(test_first_cluster[,1]) 
+  mean_second_cluster_ff <- mean(test_second_cluster[,1])
+    
+  test_stat_numer_ff <- mean_first_cluster_ff - mean_second_cluster_ff
+  test_stat_denom_ff <- sqrt((1 / size_first_cluster_ff + 
+                                1 / size_second_cluster_ff)*sigma_squared_ff)
+    
+  test_stat_ff <- test_stat_numer_ff / test_stat_denom_ff
+    
+  p_value_ff <- 2*pnorm(abs(test_stat_ff), lower.tail=FALSE) # recall it is a 2-sided test
+################################################################################
+  
+  output<- list(X, train_set, test_set, test_cluster_assignments, 
+               test_stat_ff, p_value_ff,size_first_cluster_ff,
+               size_second_cluster_ff, train_cluster_assignments, theta1)
+  names(output)<-c("X", "Train Set", "Test Set",
+              "Test Set Cluster Assignments", "Test Statistic First Feature", "p-value First Feature",
+              "Size of First Cluster (First Feature)", "Size of Second Cluster (First Feature)")
+  return(output)
+}
+```
+
+
+```{r}
+set.seed(938)
+nsims = 1000
+batch <- replicate(nsims, hypothesis_test(n=1000))
+
+# Note: batch is a matrix with nsims columns
+# batch["Test Set Cluster Assignments",1] for example returns the 4th list element (i.e. cluster assignments for the test set)
+# from the first simulation run
+
+# plot(matrix(unlist(batch["X",1])[1:1000], ncol=2, byrow=F)) can be used to plot the X dataset
+# change the 2nd value in the square brackets after batch to choose which simulation's X dataset
+```
+
+
+```{r}
+library(moments)
+test_stat_null_holds <- unlist(batch["Test Statistic First Feature",])
+p_values_null_holds <- unlist(batch["p-value First Feature",])
+
+
+
+p1 <- ~hist(test_stat_null_holds,main="Histogram of test statistics",
+            xlab="Test statistics",cex.lab=0.9, cex.axis=0.7, cex.main=0.9, 
+            prob=TRUE, col = "steelblue", breaks=5)
+
+p2 <- ~qqnorm(test_stat_null_holds, cex.lab=0.9, cex.axis=0.9, 
+              cex.main=0.9, col = "steelblue")
+
+p3 <- ~hist(p_values_null_holds,main="Histogram of p-values",xlab="P-values",
+            cex.lab=0.9, cex.axis=0.8, cex.main=0.9, prob=TRUE, col = "steelblue")
+
+#install.packages("cowplot")
+#install.packages("gridGraphics")
+library(cowplot)
+library(gridGraphics)
+
+cowplot::plot_grid(p1, p2, p3, nrow=1) 
+
+```
