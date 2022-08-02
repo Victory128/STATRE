@@ -1,0 +1,103 @@
+```{r}
+rm(list=ls())
+library(MASS)
+num_of_feats = 2
+
+hypothesis_test <- function(n){
+  
+  Xsigma <- diag(num_of_feats)
+  mean_vector <- rep(0, num_of_feats)
+  X <- rep(0, num_of_feats)
+
+  for(i in 1:n){
+        X_ith_row <- mvrnorm(1, mean_vector, Xsigma)
+        X <- rbind(X, X_ith_row)
+  }
+  X<- X[-1,] # -1 since the first row contains zero by our initial setup of X
+
+  
+##############################################################################  
+  # Apply k-means clusteringwith k=2 onto X 
+  cluster_assignments <- kmeans(X, centers=2)$cluster
+##############################################################################  
+
+  # Append the cluster_assignments onto X, which makes it convenient to use the 
+  # subset function later on to determine which rows in X belong to the first
+  # and second cluster respectively
+  X <- cbind(X, cluster_assignments)
+    
+  X_first_cluster <- subset(X, cluster_assignments==1)
+  size_first_cluster_ff <- nrow(X_first_cluster)
+  
+  X_second_cluster <- subset(X, cluster_assignments==2)
+  size_second_cluster_ff <- nrow(X_second_cluster)
+  
+##############################################################################  
+  # Conduct a two-sample Z-test on X with respect to the first feature
+  # H0: The difference of means between clusters is zero
+  # HA: The difference of means between clusters is not zero
+
+  sigma_squared_ff <- Xsigma[1,1]
+    
+  mean_first_cluster_ff <- mean(X_first_cluster[,1]) 
+  mean_second_cluster_ff <- mean(X_second_cluster[,1])
+    
+  test_stat_numer_ff <- mean_first_cluster_ff - mean_second_cluster_ff
+  test_stat_denom_ff <- sqrt((1 / size_first_cluster_ff + 
+                                1 / size_second_cluster_ff)*sigma_squared_ff)
+    
+  test_stat_ff <- test_stat_numer_ff / test_stat_denom_ff
+    
+  p_value_ff <- 2*pnorm(abs(test_stat_ff), lower.tail=FALSE) # recall it is a 2-sided test
+################################################################################    
+  
+  output<- list(X, cluster_assignments, 
+               test_stat_ff, p_value_ff,size_first_cluster_ff,
+               size_second_cluster_ff)
+  names(output)<-c("X","Cluster Assignments", "Test Statistic First Feature", "p-value First Feature",
+              "Size of First Cluster (First Feature)", "Size of Second Cluster (First Feature)")
+  return(output)
+}
+```
+
+```{r}
+set.seed(938)
+nsims = 1000
+batch <- replicate(nsims, hypothesis_test(n=1000))
+
+# Note: batch is a matrix with nsims columns
+# batch["Cluster Assignments",1] for example returns the 3rd list element (i.e. cluster assignments)
+# from the first simulation run
+
+# plot(matrix(unlist(batch["X",1])[1:1000], ncol=2, byrow=F)) can be used to plot the X dataset
+# change the 2nd value in the square brackets after batch to choose which simulation's X dataset
+```
+
+## First Feature (i.e null holds) 
+
+```{r}
+library(moments)
+test_stat_null_holds <- unlist(batch["Test Statistic First Feature",])
+p_values_null_holds <- unlist(batch["p-value First Feature",])
+
+hist(test_stat_null_holds)
+qqnorm(test_stat_null_holds)
+qqline(test_stat_null_holds, col = "steelblue", lwd = 2)
+hist(p_values_null_holds)
+
+p1 <- ~hist(test_stat_null_holds,main="Histogram of test statistics",
+            xlab="Test statistics",cex.lab=0.9, cex.axis=0.7, cex.main=0.9, 
+            prob=TRUE, col = "steelblue", breaks=7)
+
+p2 <- ~qqnorm(test_stat_null_holds, cex.lab=0.9, cex.axis=0.9, 
+              cex.main=0.9, col = "steelblue")
+
+p3 <- ~hist(p_values_null_holds,main="Histogram of p-values",xlab="P-values",
+            cex.lab=0.9, cex.axis=0.8, cex.main=0.9, prob=TRUE, col = "steelblue")
+
+library(cowplot)
+library(gridGraphics)
+
+cowplot::plot_grid(p1, p2, p3, nrow=1) 
+
+```
