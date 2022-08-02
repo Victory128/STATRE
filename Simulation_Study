@@ -1,0 +1,292 @@
+```{r}
+rm(list=ls())
+library(MASS)
+
+hypothesis_test <- function(n, tau, num_of_feats, mean_sf) {
+
+  Xsigma <- diag(num_of_feats)
+  dummy <- rep(0, num_of_feats)
+  X<- dummy
+
+  # First n/2 rows will be true cluster 1 with mean vector (0,*, 0,...,0), where the second feature's realization comes from a non-zero mean
+  # Remaining n/2 rows will be true cluster 2 with mean vector (0,-*, 0,...,0)
+  TC1_mean_vector <- dummy
+  TC2_mean_vector <- dummy
+  
+  TC1_mean_vector[2] <- mean_sf
+  TC2_mean_vector[2] <- -mean_sf
+  
+  TC1_mean_matrix <- matrix(0, ncol = num_of_feats, nrow = n/2)
+  TC1_mean_matrix[,2] = mean_sf 
+ 
+  TC2_mean_matrix <- matrix(0, ncol = num_of_feats, nrow = n/2)
+  TC2_mean_matrix[,2] = -mean_sf
+  
+  mean_matrix <- rbind(TC1_mean_matrix,TC2_mean_matrix)
+  
+  for(i in 1:n){
+      if (i <= n/2) {
+        X_ith_row <- mvrnorm(1, TC1_mean_vector, Xsigma)
+        X <- rbind(X, X_ith_row)
+      }
+      else {
+        X_ith_row <- mvrnorm(1, TC2_mean_vector, Xsigma)
+        X <- rbind(X, X_ith_row)
+      } 
+  }
+  X<-X[-1,] # -1 since the first row contains zero by our initial setup
+  
+  Zmu <- dummy
+  Zsigma <- diag(num_of_feats)
+  Z <- mvrnorm(n, Zmu, Zsigma)
+  
+##############################################################################  
+  #Create the train set and estimate the cluster assignments using kmeans
+  X_train <- X + tau*Z
+  cluster_assignments <- kmeans(X_train, centers=2)$cluster
+##############################################################################  
+  # Create the test set using the estimated cluster assignments
+  X_test <- X - (1/tau)*Z
+  
+  X_test <- cbind(X_test, mean_matrix, cluster_assignments)
+    
+  X_test_first_cluster <- subset(X_test, cluster_assignments==1)
+  size_first_cluster_ff <- nrow(X_test_first_cluster)
+  size_first_cluster_sf <- nrow(X_test_first_cluster)
+  
+  avg_true_means_first_cluster_ff <- mean(X_test_first_cluster[,num_of_feats+1])
+  #[,num_of_feats+1] by construction of cbind on line 66
+  
+  avg_true_means_first_cluster_sf <- mean(X_test_first_cluster[,num_of_feats+2])
+  
+  X_test_second_cluster <- subset(X_test, cluster_assignments==2)
+  size_second_cluster_ff <- nrow(X_test_second_cluster)
+  size_second_cluster_sf <- nrow(X_test_second_cluster)
+  avg_true_means_second_cluster_ff <- mean(X_test_second_cluster[,num_of_feats+1])
+  avg_true_means_second_cluster_sf <- mean(X_test_second_cluster[,num_of_feats+2])
+  
+  abs_diff_of_avg_true_means_bt_estimated_clusters_ff <- abs(
+    avg_true_means_first_cluster_ff - avg_true_means_second_cluster_ff)
+  
+  abs_diff_of_avg_true_means_bt_estimated_clusters_sf <- abs(
+    avg_true_means_first_cluster_sf - avg_true_means_second_cluster_sf)
+  
+##############################################################################  
+  # Conduct a two-sample Z-test on the test set with respect to the first feature
+  # H0: The difference of means between clusters in the test set is zero
+  # HA: The difference of means between clusters in the test set is not zero
+    
+  sigma_squared_ff = Xsigma[1,1] * (1+(1/tau^2)) 
+  # change Xsigma11 to Xsigma22 if the hypothesis test is instead with respect
+  # to the second feature
+    
+  mean_first_cluster_ff <- mean(X_test_first_cluster[,1]) 
+  mean_second_cluster_ff <- mean(X_test_second_cluster[,1])
+    
+  test_stat_numer_ff <- mean_first_cluster_ff - mean_second_cluster_ff
+  test_stat_denom_ff <- sqrt((1 / size_first_cluster_ff + 
+                                1 / size_second_cluster_ff)*sigma_squared_ff)
+    
+  test_stat_ff <- test_stat_numer_ff / test_stat_denom_ff
+    
+  p_value_ff <- 2*pnorm(abs(test_stat_ff), lower.tail=FALSE) # recall it is a 2-sided test
+################################################################################    
+  
+  # Conduct a two-sample Z-test on the test set with respect to the second feature
+  # H0: The difference of means between clusters in the test set is zero
+  # HA: The difference of means between clusters in the test set is not zero
+    
+  sigma_squared_sf = Xsigma[2,2] * (1+(1/tau^2)) 
+
+  mean_first_cluster_sf <- mean(X_test_first_cluster[,2]) 
+  mean_second_cluster_sf <- mean(X_test_second_cluster[,2])
+ 
+  test_stat_numer_sf <- mean_first_cluster_sf - mean_second_cluster_sf
+  test_stat_denom_sf <- sqrt((1 / size_first_cluster_sf + 
+                                1 / size_second_cluster_sf)*sigma_squared_sf)
+    
+  test_stat_sf <- test_stat_numer_sf / test_stat_denom_sf
+    
+  p_value_sf <- 2*pnorm(abs(test_stat_sf), lower.tail=FALSE) # recall it is a 2-sided test
+################################################################################    
+  output<- list(mean_matrix, Z, X, #1-3
+              cluster_assignments, X_test, X_test_first_cluster, #3-6
+              X_test_second_cluster, test_stat_ff, p_value_ff, #6-9
+              test_stat_sf, p_value_sf, avg_true_means_first_cluster_ff, # 10-12
+              avg_true_means_first_cluster_sf, avg_true_means_second_cluster_ff, #13-14
+              avg_true_means_second_cluster_sf, abs_diff_of_avg_true_means_bt_estimated_clusters_ff, #15-16
+              abs_diff_of_avg_true_means_bt_estimated_clusters_sf, size_first_cluster_ff,#17-18
+              size_first_cluster_sf, size_second_cluster_ff, size_second_cluster_sf #19-21
+              )
+  names(output)<-c("Mean Matrix", "Z", "X",
+              "Cluster Assignments", "X Test", "X Test First Cluster",
+              "X Test Second Cluster", "Test Statistic First Feature", "p-value First Feature",
+              "Test Statistic Second Feature", "p-value Second Feature", 
+              "Average of First Feature's True Means in First Cluster", 
+              "Average of Second Feature's True Means in First Cluster", 
+              "Average of First Feature's True Means in Second Cluster", 
+              "Average of Second Feature's True Means in Second Cluster", 
+              "Absolute Difference of First Feature's Average True Means between estimated clusters", 
+              "Absolute Difference of Second Feature's Average True Means between estimated clusters",
+              "Size of First Cluster (First Feature)",
+              "Size of First Cluster (Second Feature)", 
+              "Size of Second Cluster (First Feature)", 
+              "Size of Second Cluster (Second Feature)"
+              )
+  return(output)
+}
+
+```
+
+```{r}
+set.seed(128)
+num_of_feats <- 5
+nsims <- 1000
+batch <- replicate(nsims, hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=0.5))
+
+# batch["Cluster Assignments",1] 
+# Note: batch is a matrix with nsims columns
+# batch["Cluster Assignments",1] for example returns the 4th list element (i.e. cluster assignments)
+# from the first simulation run
+
+# plot(matrix(unlist(batch["X",1]), ncol=2, byrow=F)) can be used to plot the X dataset
+# change the 2nd value in the square brackets after batch to choose which simulation's X dataset
+```
+
+## First Feature (i.e null holds) 
+
+```{r}
+library(moments)
+test_stat_null_holds <- unlist(batch["Test Statistic First Feature",])
+skewness(test_stat_null_holds)
+kurtosis(test_stat_null_holds)
+
+p_values_null_holds <- unlist(batch["p-value First Feature",])
+
+hist(test_stat_null_holds)
+qqnorm(test_stat_null_holds)
+qqline(test_stat_null_holds, col = "steelblue", lwd = 2)
+hist(p_values_null_holds)
+
+p1 <- ~hist(test_stat_null_holds,main="Histogram of test statistics",xlab="Test statistics",
+            cex.lab=0.9, cex.axis=0.7, cex.main=0.9, prob=TRUE, col = "steelblue")
+p2 <- ~qqnorm(test_stat_null_holds, cex.lab=0.9, cex.axis=0.9, cex.main=0.9, col = "steelblue")
+
+uniform_sample <- runif(10000,0,1)
+p3 <- ~qqplot(uniform_sample, p_values_null_holds, xlab="U(0,1) Theoretical Quantiles", 
+              ylab="Sample Quantiles", main="Uniform Q-Q Plot", cex.lab=0.9, 
+              cex.axis=0.7, cex.main=0.9,col = "steelblue")
+#p3 <- ~hist(p_values_null_holds,main="Histogram of p-values",xlab="P-values",cex.lab=0.9, cex.axis=0.8, cex.main=0.9, prob=TRUE)
+
+cowplot::plot_grid(p1, p3, nrow=1) 
+
+
+# Find proportion of p-values greater than 0.05 (the alpha)
+Type_I_error_rate<- length(p_values_null_holds[p_values_null_holds<0.05])/nsims
+Type_I_error_rate
+```
+
+
+## Second Feature (i.e. null not guaranteed to hold)
+
+```{r}
+test_stat_null_does_not_hold <- unlist(batch["Test Statistic Second Feature",]) 
+p_values_null_does_not_hold <- unlist(batch["p-value Second Feature",])
+
+hist(test_stat_null_does_not_hold)
+qqnorm(test_stat_null_does_not_hold)
+qqline(test_stat_null_does_not_hold, col = "steelblue", lwd = 2)
+
+# To access whether the p-values follow a U(0,1) distribution, we use qqplot instead of qqnorm
+uniform_sample <- runif(10,0,1)
+hist(p_values_null_does_not_hold)
+qqplot(uniform_sample, p_values_null_does_not_hold, xlab="U(0,1) Quantiles", ylab="Test Statistic Quantiles")
+
+library(qqtest)
+savePar <- par(mfrow=c(2,2))
+hist(test_stat_null_does_not_hold)
+qqtest(test_stat_null_does_not_hold, "normal")
+hist(p_values_null_does_not_hold)
+qqtest(p_values_null_does_not_hold, "uniform")
+
+```
+
+## Now consider a vector of means_sf
+```{r}
+num_of_feats <- 5
+means_sf <- c(0.5, 1)
+
+master_list <- vector(mode='list', length=length(means_sf))
+
+
+for(i in 1:length(means_sf)){
+  mean_sf <- means_sf[i]
+  batch_i <- replicate(nsims,hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=mean_sf))
+  master_list[[i]] <- batch_i
+}
+
+#master_list[[1]] gives all the results regarding each simulation run when mean_sf=means_sf[1]
+#master_list[[1]]["p-value Second Feature",] gives nsims p-values (relating to the second feature) when mean_sf=means_sf[1]
+
+#master_list[[1]]["p-value Second Feature",1] gives the p-value (relating to the second feature) pertaining to the first simulation run when mean_sf=means_sf[1]
+```
+
+## Create the matrices of interest along with the visualization strategies
+```{r}
+delta <- c()
+p <- c()
+
+for(i in 1:length(means_sf)){
+  ith_delta<- unlist(master_list[[i]]["Absolute Difference of Second Feature's Average True Means between estimated clusters",])
+  ith_p <- unlist(master_list[[i]]["p-value Second Feature",])
+  delta<-c(delta, ith_delta)
+  p<-c(p, ith_p)
+}
+
+viz_matrix<-matrix(0, ncol = 2, nrow = nsims*length(means_sf))
+colnames(viz_matrix) <- c("Ceiling of Delta", "P-value")
+viz_matrix[,"Ceiling of Delta"]<-ceiling(delta) # Round up to the nearest integer to pave the path for the boxplot
+viz_matrix[,"P-value"]<-p
+
+viz <- as.data.frame(viz_matrix)
+
+```
+
+
+```{r}
+library(ggplot2)
+
+boxplot(p~ceiling(delta),main="Delta vs. P-values",xlab="Delta",ylab="P-value",col = "skyblue",border="purple")
+
+boxplot(log10(p)~ceiling(delta), main="Delta vs. P-values", xlab="Delta", ylab="log10 P-value", col = "skyblue", border="purple")
+
+#################################################################################
+# Further explore the case when ceiling(delta) is equal to 1
+delta_one<-viz_matrix[viz_matrix[,"Ceiling of Delta"]==1,]
+
+delta_one_tests_rejected<-nrow(delta_one[delta_one[,"P-value"]<0.05,])
+delta_one_tests_rejected
+
+delta_one_total_num_of_tests <- nrow(delta_one)
+delta_one_total_num_of_tests
+
+proportion_of_tests_rejected_delta_one<- delta_one_tests_rejected/nrow(delta_one)
+proportion_of_tests_rejected_delta_one
+
+#################################################################################
+# Further explore the case when ceiling(delta) is equal to 2
+delta_two<-viz_matrix[viz_matrix[,"Ceiling of Delta"]==2,]
+
+delta_two_tests_rejected<-nrow(delta_two[delta_two[,"P-value"]<0.05,])
+delta_two_tests_rejected
+
+delta_two_total_num_of_tests <- nrow(delta_two)
+delta_two_total_num_of_tests
+
+proportion_of_tests_rejected_delta_two<- delta_two_tests_rejected/nrow(delta_two)
+proportion_of_tests_rejected_delta_two
+
+```
+
+
+
