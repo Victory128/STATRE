@@ -142,7 +142,7 @@ hypothesis_test <- function(n, tau, num_of_feats, mean_sf) {
 set.seed(128)
 num_of_feats <- 5
 nsims <- 1000
-batch <- replicate(nsims, hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=0.5))
+batch <- replicate(nsims, hypothesis_test(n=10000, tau=1, num_of_feats=num_of_feats, mean_sf=0.5))
 
 # batch["Cluster Assignments",1] 
 # Note: batch is a matrix with nsims columns
@@ -221,7 +221,7 @@ master_list <- vector(mode='list', length=length(means_sf))
 
 for(i in 1:length(means_sf)){
   mean_sf <- means_sf[i]
-  batch_i <- replicate(nsims,hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=mean_sf))
+  batch_i <- replicate(nsims,hypothesis_test(n=10000, tau=1, num_of_feats=num_of_feats, mean_sf=mean_sf))
   master_list[[i]] <- batch_i
 }
 
