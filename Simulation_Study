@@ -139,10 +139,9 @@ hypothesis_test <- function(n, tau, num_of_feats, mean_sf) {
 ```
 
 ```{r}
-set.seed(128)
 num_of_feats <- 5
 nsims <- 1000
-batch <- replicate(nsims, hypothesis_test(n=10000, tau=1, num_of_feats=num_of_feats, mean_sf=0.5))
+batch <- replicate(nsims, hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=0.5))
 
 # batch["Cluster Assignments",1] 
 # Note: batch is a matrix with nsims columns
@@ -198,7 +197,7 @@ qqnorm(test_stat_null_does_not_hold)
 qqline(test_stat_null_does_not_hold, col = "steelblue", lwd = 2)
 
 # To access whether the p-values follow a U(0,1) distribution, we use qqplot instead of qqnorm
-uniform_sample <- runif(10,0,1)
+uniform_sample <- runif(1000,0,1)
 hist(p_values_null_does_not_hold)
 qqplot(uniform_sample, p_values_null_does_not_hold, xlab="U(0,1) Quantiles", ylab="Test Statistic Quantiles")
 
@@ -221,7 +220,7 @@ master_list <- vector(mode='list', length=length(means_sf))
 
 for(i in 1:length(means_sf)){
   mean_sf <- means_sf[i]
-  batch_i <- replicate(nsims,hypothesis_test(n=10000, tau=1, num_of_feats=num_of_feats, mean_sf=mean_sf))
+  batch_i <- replicate(nsims,hypothesis_test(n=1000, tau=1, num_of_feats=num_of_feats, mean_sf=mean_sf))
   master_list[[i]] <- batch_i
 }
 
@@ -285,7 +284,6 @@ delta_two_total_num_of_tests
 
 proportion_of_tests_rejected_delta_two<- delta_two_tests_rejected/nrow(delta_two)
 proportion_of_tests_rejected_delta_two
-
 ```
 
 
