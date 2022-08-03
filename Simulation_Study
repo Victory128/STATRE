@@ -8,8 +8,8 @@ hypothesis_test <- function(n, tau, num_of_feats, mean_sf) {
   dummy <- rep(0, num_of_feats)
   X<- dummy
 
-  # First n/2 rows will be true cluster 1 with mean vector (0,*, 0,...,0), where the second feature's realization comes from a non-zero mean
-  # Remaining n/2 rows will be true cluster 2 with mean vector (0,-*, 0,...,0)
+  # First n/2 rows will be true cluster 1 with mean vector (0,c, 0,...,0), where the second feature's realization comes from a non-zero mean
+  # Remaining n/2 rows will be true cluster 2 with mean vector (0,-c, 0,...,0)
   TC1_mean_vector <- dummy
   TC2_mean_vector <- dummy
   
