@@ -95,7 +95,7 @@ hypothesis_test <- function(n){
   
   output<- list(X, train_set, test_set, test_cluster_assignments, 
                test_stat_ff, p_value_ff,size_first_cluster_ff,
-               size_second_cluster_ff, train_cluster_assignments, theta1)
+               size_second_cluster_ff)
   names(output)<-c("X", "Train Set", "Test Set",
               "Test Set Cluster Assignments", "Test Statistic First Feature", "p-value First Feature",
               "Size of First Cluster (First Feature)", "Size of Second Cluster (First Feature)")
