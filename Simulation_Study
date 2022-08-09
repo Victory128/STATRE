@@ -1,7 +1,7 @@
 ```{r}
 rm(list=ls())
 library(MASS)
-
+##
 hypothesis_test <- function(n, tau, num_of_feats, mean_sf) {
 
   Xsigma <- diag(num_of_feats)
